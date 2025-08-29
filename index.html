@@ -132,7 +132,11 @@
         log("Starting the poll automation script...");
         while (isVoting) {
           try {
-            const returnLink = await waitForElement("a.pds-return-poll", 2000);
+            const returnLink = await waitForElement(
+              "a.pds-return-poll",
+              10,
+              200,
+            );
             if (returnLink) {
               updateLogBox("Found 'Return to Poll' link. Handling rate limit.");
               await postVoteHandler();
