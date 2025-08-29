@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Poll</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        text-align: center;
+        padding-top: 50px;
+      }
+      #logBox {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        max-height: 15%;
+        overflow: auto;
+        background: #000;
+        color: #0f0;
+        font: 12px monospace;
+        z-index: 999999;
+        padding: 5px;
+        text-align: left;
+      }
+    </style>
+  </head>
+  <body>
+    <button id="startBtn">Start Voting</button>
+
+    <script
+      type="text/javascript"
+      charset="utf-8"
+      src="https://secure.polldaddy.com/p/15909793.js"
+    ></script>
+
+    <script>
+      let successfulVotes = 0;
+      let isVoting = false;
+
+      function getOrCreateLogBox() {
+        if (!document.getElementById("logBox")) {
+          const logDiv = document.createElement("div");
+          logDiv.id = "logBox";
+          document.body.appendChild(logDiv);
+        }
+        return document.getElementById("logBox");
+      }
+
+      function updateLogBox(msg) {
+        const logBox = getOrCreateLogBox();
+        logBox.innerHTML = `[AutoVote] ${msg}<br>🗳️ Total Votes Sent: ${successfulVotes}`;
+      }
+
+      const log = console.log;
+
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      const randomDelay = (min, max) => Math.random() * (max - min) + min;
+
+      async function waitForElement(selector, timeout = 10000) {
+        const startTime = Date.now();
+        while (Date.now() - startTime < timeout) {
+          const element = document.querySelector(selector);
+          if (element) {
+            return element;
+          }
+          // Changed to a shorter poll time
+          await wait(100);
+        }
+        return null;
+      }
+
+      async function postVoteHandler() {
+        const captchaInput = await waitForElement("#answer_15909793");
+        const returnLink = await waitForElement("a.pds-return-poll");
+        const voteBtn = await waitForElement("#pd-vote-button15909793");
+
+        // Case 1: Captcha appears
+        if (captchaInput) {
+          log("🧮 Captcha input found. Solving...");
+          const captchaQuestion = document.querySelector(".h-captcha p");
+          if (captchaQuestion) {
+            const expr = (captchaQuestion.innerText.match(/[\d+\-*/ ]+/) || [
+              "",
+            ])[0]
+              .replace("=", "")
+              .trim();
+            if (expr) {
+              let answer = Function("return(" + expr + ")")();
+              captchaInput.value = answer;
+              captchaInput.dispatchEvent(new Event("input", { bubbles: true }));
+              log(`🧮 Captcha solved: ${expr} = ${answer}`);
+              await wait(randomDelay(500, 1000));
+              if (voteBtn && !voteBtn.disabled) {
+                voteBtn.click();
+                successfulVotes++;
+                updateLogBox("Vote sent!");
+              }
+            }
+          }
+          await wait(randomDelay(1000, 2000));
+          const returnLinkAfterCaptcha =
+            await waitForElement("a.pds-return-poll");
+          if (returnLinkAfterCaptcha) {
+            log(
+              "🔗 Return link detected after captcha, clicking after brief pause...",
+            );
+            await wait(randomDelay(2000, 3000));
+            returnLinkAfterCaptcha.click();
+            await wait(randomDelay(500, 1000));
+          }
+          return;
+        }
+
+        // Case 2: Return link due to rate limit (no captcha)
+        if (returnLink) {
+          updateLogBox(
+            "⚠️ Rate limit detected. Pausing 60-70 seconds before retry...",
+          );
+          await wait(randomDelay(60000, 70000));
+          log("🔄 Resuming vote after pause.");
+          returnLink.click();
+          await wait(randomDelay(500, 1000));
+          return;
+        }
+
+        // Case 3: Timeout, neither captcha nor return link found
+        log("⚠️ Timeout. No captcha or return link found. Reloading...");
+        location.reload();
+      }
+
+      async function startVotingLoop() {
+        isVoting = true;
+        log("Starting the poll automation script...");
+        while (isVoting) {
+          try {
+            const returnLink = await waitForElement("a.pds-return-poll", 2000);
+            if (returnLink) {
+              updateLogBox("Found 'Return to Poll' link. Handling rate limit.");
+              await postVoteHandler();
+              continue;
+            }
+
+            const radioBtn = await waitForElement("input#PDI_answer70048651");
+            const voteBtn = await waitForElement("#pd-vote-button15909793");
+
+            if (radioBtn && voteBtn && !voteBtn.disabled) {
+              if (!radioBtn.checked) {
+                log("🔘 Radio button not checked. Clicking it now.");
+                radioBtn.click();
+              } else {
+                log("✅ Radio button is already checked.");
+              }
+
+              await wait(randomDelay(500, 1000));
+              voteBtn.click();
+              log("🗳️ Initial vote button clicked.");
+
+              await postVoteHandler();
+            } else {
+              log("⚠️ No votable elements found. Waiting...");
+            }
+
+            await wait(randomDelay(1000, 2000));
+          } catch (error) {
+            log("An error occurred during the loop, restarting in 5 seconds.");
+            console.error(error);
+            await wait(5000);
+          }
+        }
+      }
+
+      // Hook button
+      document.getElementById("startBtn").addEventListener("click", () => {
+        if (!isVoting) {
+          log("🔘 Start button clicked — launching voting loop");
+          startVotingLoop();
+        } else {
+          log("Voting is already in progress.");
+        }
+      });
+    </script>
+  </body>
+</html>
