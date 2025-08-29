@@ -57,15 +57,13 @@
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const randomDelay = (min, max) => Math.random() * (max - min) + min;
 
-      async function waitForElement(selector, timeout = 10000) {
-        const startTime = Date.now();
-        while (Date.now() - startTime < timeout) {
+      async function waitForElement(selector, attempts = 20, delay = 200) {
+        for (let i = 0; i < attempts; i++) {
           const element = document.querySelector(selector);
           if (element) {
             return element;
           }
-          // Changed to a shorter poll time
-          await wait(100);
+          await wait(delay);
         }
         return null;
       }
