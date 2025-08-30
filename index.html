@@ -3,80 +3,139 @@
   <head>
     <meta charset="UTF-8" />
     <title>Poll</title>
-    <style>
-      body {
-        font-family: sans-serif;
-        text-align: center;
-        padding-top: 50px;
-      }
-      #logBox {
-        position: fixed;
-        bottom: 0;
-        left: 0;
-        width: 100%;
-        max-height: 15%;
-        overflow: auto;
-        background: #000;
-        color: #0f0;
-        font: 12px monospace;
-        z-index: 999999;
-        padding: 5px;
-        text-align: left;
-      }
-    </style>
+    <script src="https://cdn.tailwindcss.com"></script>
   </head>
-  <body>
-    <button id="startBtn">Start Voting</button>
+  <body
+    class="font-sans flex items-start flex-wrap text-center gap-3 pt-12 bg-gray-900 text-green-500"
+  >
+    <!-- Vote counter and log box (fixed left) -->
+    <div class="w-full max-w-sm flex flex-col gap-2 z-50">
+      <!-- Votes sent counter -->
+      <!-- Start Voting button -->
+      <div class="flex gap-4 justify-center mb-4">
+        <!-- Will Button -->
+        <div>
+          <button
+            id="voteWill"
+            class="px-4 py-2 bg-green-800 border-2 border-green-500 text-green-300 rounded-md font-mono transition-colors duration-200 hover:bg-green-500 hover:text-black"
+          >
+            Start Voting for Will
+          </button>
 
-    <script
-      type="text/javascript"
-      charset="utf-8"
-      src="https://secure.polldaddy.com/p/15909793.js"
-    ></script>
+          <div
+            id="voteCounterWill"
+            class="text-green-400 font-bold font-mono text-sm"
+          >
+            🗳️ Will Votes: 0
+          </div>
+        </div>
+        <div>
+          <!-- Emilio Button -->
+          <button
+            id="voteEmilio"
+            class="px-4 py-2 bg-blue-800 border-2 border-blue-500 text-blue-300 rounded-md font-mono transition-colors duration-200 hover:bg-blue-500 hover:text-black"
+          >
+            Start Voting for Emilio
+          </button>
+
+          <div
+            id="voteCounterEmilio"
+            class="text-blue-300 font-bold font-mono text-sm"
+          >
+            🗳️ Emilio Votes: 0
+          </div>
+        </div>
+      </div>
+
+      <!-- Log box -->
+      <div
+        id="logBox"
+        class="w-full h-96 overflow-y-auto text-left bg-black text-green-500 font-mono text-sm p-3 rounded-lg shadow-md shadow-green-500/50"
+      >
+        📜 Log initialized...<br />
+      </div>
+    </div>
+
+    <!-- Container for voting -->
+    <div
+      id="votingContainer"
+      class="flex flex-col items-start gap-3 h-[1000px]"
+    >
+      <!-- Poll wrapper -->
+      <div
+        id="pollWrapper"
+        class="w-full min-h-[100px] bg-gray-800 p-3 rounded-lg shadow-md shadow-green-500/50"
+      >
+        <script
+          type="text/javascript"
+          charset="utf-8"
+          src="https://secure.polldaddy.com/p/15909793.js"
+        ></script>
+      </div>
+    </div>
 
     <script>
-      let successfulVotes = 0;
+      let successfulVotesForWill = 0;
+      let successfulVotesForEmilio = 0;
       let isVoting = false;
+      let selectedCandidateId = null; // will hold the radio button ID
 
-      function getOrCreateLogBox() {
-        if (!document.getElementById("logBox")) {
-          const logDiv = document.createElement("div");
-          logDiv.id = "logBox";
-          document.body.appendChild(logDiv);
+      // Cache DOM elements to avoid repeated queries
+      const logBox = document.getElementById("logBox");
+      // Cache the vote counter DOM elements
+      const voteCounterWill = document.getElementById("voteCounterWill");
+      const voteCounterEmilio = document.getElementById("voteCounterEmilio");
+
+      // Custom logger: append messages and auto-trim to last 20
+      function log(msg) {
+        const time = new Date().toLocaleTimeString();
+        const logBox = document.getElementById("logBox");
+
+        // Check if message mentions rate limit
+        const isRateLimit = /rate limit/i.test(msg);
+        const color = isRateLimit ? "red" : "green";
+
+        // Append the message
+        logBox.innerHTML += `<span style="color:${color}">[${time}] ${msg}</span><br>`;
+        logBox.scrollTop = logBox.scrollHeight; // auto-scroll
+
+        // Keep only last 20 messages
+        const lines = logBox.innerHTML.split("<br>");
+        if (lines.length > 21) {
+          lines.splice(0, lines.length - 21);
+          logBox.innerHTML = lines.join("<br>");
         }
-        return document.getElementById("logBox");
       }
 
-      function updateLogBox(msg) {
-        const logBox = getOrCreateLogBox();
-        logBox.innerHTML = `[AutoVote] ${msg}<br>🗳️ Total Votes Sent: ${successfulVotes}`;
+      // Update vote counter in DOM
+
+      function updateVoteCounter(candidate) {
+        if (candidate === "Will") {
+          voteCounterWill.innerText = `🗳️ Total Votes Sent for Will: ${successfulVotesForWill}`;
+        } else if (candidate === "Emilio") {
+          voteCounterEmilio.innerText = `🗳️ Total Votes Sent for Emilio: ${successfulVotesForEmilio}`;
+        }
       }
-
-      const log = console.log;
-
+      // Wait for an element to appear with retries
       const wait = (ms) => new Promise((r) => setTimeout(r, ms));
       const randomDelay = (min, max) => Math.random() * (max - min) + min;
-
-      async function waitForElement(selector, attempts = 20, delay = 200) {
+      async function waitForElement(selector, attempts = 20, delay = 100) {
         for (let i = 0; i < attempts; i++) {
-          const element = document.querySelector(selector);
-          if (element) {
-            return element;
-          }
+          const el = document.querySelector(selector);
+          if (el) return el;
           await wait(delay);
         }
         return null;
       }
 
+      // Handle captcha, rate limit, and voting logic
       async function postVoteHandler() {
         const captchaInput = await waitForElement("#answer_15909793");
-        const returnLink = await waitForElement("a.pds-return-poll");
-        const voteBtn = await waitForElement("#pd-vote-button15909793");
-
-        // Case 1: Captcha appears
         if (captchaInput) {
           log("🧮 Captcha input found. Solving...");
           const captchaQuestion = document.querySelector(".h-captcha p");
+          const voteBtn = document.querySelector("#pd-vote-button15909793");
+
           if (captchaQuestion) {
             const expr = (captchaQuestion.innerText.match(/[\d+\-*/ ]+/) || [
               "",
@@ -84,102 +143,112 @@
               .replace("=", "")
               .trim();
             if (expr) {
-              let answer = Function("return(" + expr + ")")();
+              const answer = Function("return(" + expr + ")")();
               captchaInput.value = answer;
               captchaInput.dispatchEvent(new Event("input", { bubbles: true }));
               log(`🧮 Captcha solved: ${expr} = ${answer}`);
               await wait(randomDelay(500, 1000));
+
+              // In postVoteHandler, after voteBtn.click():
               if (voteBtn && !voteBtn.disabled) {
                 voteBtn.click();
-                successfulVotes++;
-                updateLogBox("Vote sent!");
+
+                // Increment counter based on selected candidate
+                if (selectedCandidateId === "PDI_answer70048651") {
+                  successfulVotesForWill++;
+                  updateVoteCounter("Will");
+                } else if (selectedCandidateId === "PDI_answer70048652") {
+                  successfulVotesForEmilio++;
+                  updateVoteCounter("Emilio");
+                }
+
+                log(
+                  `🗳️ Vote sent for ${selectedCandidateId === "PDI_answer70048651" ? "Will" : "Emilio"}!`,
+                );
               }
             }
           }
-          await wait(randomDelay(1000, 2000));
+
           const returnLinkAfterCaptcha =
             await waitForElement("a.pds-return-poll");
           if (returnLinkAfterCaptcha) {
-            log(
-              "🔗 Return link detected after captcha, clicking after brief pause...",
-            );
-            await wait(randomDelay(2000, 3000));
+            log("🔗 Return link detected after captcha, clicking...");
+            await wait(randomDelay(100, 500));
             returnLinkAfterCaptcha.click();
-            await wait(randomDelay(500, 1000));
           }
           return;
         }
 
-        // Case 2: Return link due to rate limit (no captcha)
+        // Rate limit case
+        const returnLink = document.querySelector("a.pds-return-poll");
         if (returnLink) {
-          updateLogBox(
-            "⚠️ Rate limit detected. Pausing 60-70 seconds before retry...",
-          );
-          await wait(randomDelay(60000, 70000));
+          log("⚠️ Rate limit detected. Pausing 60-70s...");
+          await wait(randomDelay(60000, 63000));
           log("🔄 Resuming vote after pause.");
           returnLink.click();
-          await wait(randomDelay(500, 1000));
-          return;
         }
-
-        // Case 3: Timeout, neither captcha nor return link found
-        log("⚠️ Timeout. No captcha or return link found. Reloading...");
-        location.reload();
       }
 
-      async function startVotingLoop() {
+      // Main voting loop
+
+      async function startVotingLoop(candidateId) {
         isVoting = true;
-        log("Starting the poll automation script...");
+        selectedCandidateId = candidateId;
+        log(
+          `🚀 Starting the poll automation script for candidate ${candidateId}...`,
+        );
+
         while (isVoting) {
           try {
             const returnLink = await waitForElement(
               "a.pds-return-poll",
-              10,
+              1,
               200,
             );
             if (returnLink) {
-              updateLogBox("Found 'Return to Poll' link. Handling rate limit.");
+              log("Found 'Return to Poll' link. Handling rate limit.");
               await postVoteHandler();
               continue;
             }
 
-            const radioBtn = await waitForElement("input#PDI_answer70048651");
-            const voteBtn = await waitForElement("#pd-vote-button15909793");
+            // Wait for the candidate's radio button and vote button
+            const radioBtn = await waitForElement(`input#${candidateId}`);
+            const voteBtn = document.querySelector("#pd-vote-button15909793");
 
             if (radioBtn && voteBtn && !voteBtn.disabled) {
               if (!radioBtn.checked) {
-                log("🔘 Radio button not checked. Clicking it now.");
+                log(`🔘 ${candidateId} not checked. Clicking it now.`);
                 radioBtn.click();
               } else {
-                log("✅ Radio button is already checked.");
+                log(`✅ ${candidateId} already checked.`);
               }
 
               await wait(randomDelay(500, 1000));
               voteBtn.click();
               log("🗳️ Initial vote button clicked.");
-
               await postVoteHandler();
             } else {
               log("⚠️ No votable elements found. Waiting...");
             }
 
-            await wait(randomDelay(1000, 2000));
-          } catch (error) {
-            log("An error occurred during the loop, restarting in 5 seconds.");
-            console.error(error);
+            await wait(randomDelay(500, 1000));
+          } catch (err) {
+            log("💥 Error in loop, restarting in 5 seconds.");
+            console.error(err);
             await wait(5000);
           }
         }
       }
 
-      // Hook button
-      document.getElementById("startBtn").addEventListener("click", () => {
-        if (!isVoting) {
-          log("🔘 Start button clicked — launching voting loop");
-          startVotingLoop();
-        } else {
-          log("Voting is already in progress.");
-        }
+      // Hook both buttons
+      document.getElementById("voteWill").addEventListener("click", () => {
+        if (!isVoting) startVotingLoop("PDI_answer70048651");
+        else log("⚠️ Voting already in progress.");
+      });
+
+      document.getElementById("voteEmilio").addEventListener("click", () => {
+        if (!isVoting) startVotingLoop("PDI_answer70048652");
+        else log("⚠️ Voting already in progress.");
       });
     </script>
   </body>
