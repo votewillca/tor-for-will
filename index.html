@@ -230,34 +230,6 @@
               voteBtn.click();
               log("🗳️ Initial vote button clicked.");
               await postVoteHandler();
-            } else {
-              log("⚠️ No votable elements found. Resetting the poll...");
-
-              // Remove old poll wrapper
-              const oldPoll = document.getElementById("pollWrapper");
-              if (oldPoll) oldPoll.remove();
-
-              // Recreate poll container & wrapper
-              const votingContainer =
-                document.getElementById("votingContainer");
-              if (votingContainer) {
-                const pollWrapper = document.createElement("div");
-                pollWrapper.id = "pollWrapper";
-                pollWrapper.className =
-                  "w-full min-h-[100px] bg-gray-800 p-3 rounded-lg shadow-md shadow-green-500/50";
-
-                const script = document.createElement("script");
-                script.type = "text/javascript";
-                script.charset = "utf-8";
-                script.src = "https://secure.polldaddy.com/p/15909793.js";
-
-                pollWrapper.appendChild(script);
-                votingContainer.appendChild(pollWrapper);
-              }
-
-              // Optional: wait a short random delay before next iteration
-              await wait(randomDelay(5000, 10000));
-              log("♻️ Poll reset, continuing loop...");
             }
 
             await wait(randomDelay(500, 1000));
